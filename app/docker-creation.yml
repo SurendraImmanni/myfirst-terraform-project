@@ -5,7 +5,7 @@
 
   vars:
     src_app_path: "./app"        # Files on Ansible server
-    dest_app_path: "/home/ec2-user/myapp"   # Folder on Docker server
+    dest_app_path: "/home/ec2-user/app"   # Folder on Docker server
     image_name: "digitalform:v1"
     container_name: "digitalform-container"
 
