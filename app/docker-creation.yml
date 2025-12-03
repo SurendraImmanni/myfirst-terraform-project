@@ -10,27 +10,9 @@
     container_name: "digitalform-container"
 
   tasks:
-
-    - name: Install dependencies
+    - name: Install docker
       yum:
-        name:
-          - yum-utils
-          - device-mapper-persistent-data
-          - lvm2
-        state: present
-
-    - name: Add Docker CE repo
-      command: >
-        yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
-      args:
-        creates: /etc/yum.repos.d/docker-ce.repo
-
-    - name: Install Docker CE
-      yum:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
+        name: docker
         state: present
 
     - name: Start and enable Docker
@@ -54,7 +36,7 @@
 
     - name: Copy Dockerfile and index.html to Docker server
       copy:
-        src: "{{ src_app_path }}/"
+        src: "{{ item }}"
         dest: "{{ dest_app_path }}/"
         owner: ec2-user
         group: ec2-user
@@ -76,3 +58,6 @@
 
     - name: Run Docker container on port 80
       command: docker run -d -p 80:80 --name {{ container_name }} {{ image_name }}
+
+    
+      
