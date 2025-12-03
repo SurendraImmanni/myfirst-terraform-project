@@ -86,7 +86,7 @@ ${ip} ansible_user=ec2-user ansible_ssh_private_key_file=${SSH_KEY}
         stage('Run Ansible Playbook') {
             steps {
                 sh """
-                    ansible-playbook -i inventory.ini docker-creation.yml \
+                    ansible-playbook -i inventory.ini app/docker-creation.yml \
                     --private-key ${SSH_KEY} \
                     --ssh-extra-args='-o StrictHostKeyChecking=no'
                 """
