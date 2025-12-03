@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Digital Course Enquiry Form</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f5f6fa;
+        display: flex;
+        justify-content: center;
+        margin-top: 40px;
+    }
+    .form-container {
+        background: white;
+        padding: 25px;
+        width: 380px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    }
+    h2 {
+        text-align: center;
+        color: #1e90ff;
+    }
+    label {
+        font-weight: bold;
+    }
+    input, select {
+        width: 100%;
+        padding: 10px;
+        margin: 8px 0 16px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+    }
+    button {
+        width: 48%;
+        padding: 10px;
+        border: none;
+        border-radius: 5px;
+        color: white;
+        font-size: 15px;
+        cursor: pointer;
+    }
+    .save-btn { background-color: #ff9800; }
+    .submit-btn { background-color: #4CAF50; }
+    .btn-group {
+        display: flex;
+        justify-content: space-between;
+    }
+</style>
+</head>
+<body>
+
+<div class="form-container">
+    <h2>Course Registration Form</h2>
+
+    <label>Name</label>
+    <input type="text" id="name" placeholder="Enter your name">
+
+    <label>Phone Number</label>
+    <input type="text" id="number" placeholder="Enter phone number">
+
+    <label>Email</label>
+    <input type="email" id="email" placeholder="Enter email">
+
+    <label>Location</label>
+    <input type="text" id="location" placeholder="Enter your location">
+
+    <label>Interested Course</label>
+    <select id="course">
+        <option value="">-- Select Course --</option>
+        <option>DevOps</option>
+        <option>AWS Cloud</option>
+        <option>Azure Cloud</option>
+        <option>Python Full Stack</option>
+        <option>Java Full Stack</option>
+        <option>Data Engineering</option>
+    </select>
+
+    <label>Time Availability</label>
+    <select id="availability">
+        <option value="">-- Select Time --</option>
+        <option>Morning</option>
+        <option>Afternoon</option>
+        <option>Evening</option>
+        <option>Weekend Batch</option>
+    </select>
+
+    <div class="btn-group">
+        <button class="save-btn" onclick="saveData()">Save</button>
+        <button class="submit-btn" onclick="submitForm()">Submit</button>
+    </div>
+</div>
+
+<script>
+    // SAVE DATA LOCALLY
+    function saveData() {
+        let formData = {
+            name: document.getElementById("name").value,
+            number: document.getElementById("number").value,
+            email: document.getElementById("email").value,
+            location: document.getElementById("location").value,
+            course: document.getElementById("course").value,
+            availability: document.getElementById("availability").value
+        };
+
+        localStorage.setItem("formData", JSON.stringify(formData));
+        alert("Data saved successfully!");
+    }
+
+    // SUBMIT FORM
+    function submitForm() {
+        let savedData = localStorage.getItem("formData");
+
+        if (!savedData) {
+            alert("Please save the form before submitting!");
+            return;
+        }
+
+        let data = JSON.parse(savedData);
+
+        alert(
+            "Form Submitted Successfully!\n\n" +
+            "Name: " + data.name + "\n" +
+            "Number: " + data.number + "\n" +
+            "Email: " + data.email + "\n" +
+            "Location: " + data.location + "\n" +
+            "Course: " + data.course + "\n" +
+            "Availability: " + data.availability
+        );
+
+        localStorage.removeItem("formData");
+
+        // Clear form
+        document.querySelector("form");
+        document.getElementById("name").value = "";
+        document.getElementById("number").value = "";
+        document.getElementById("email").value = "";
+        document.getElementById("location").value = "";
+        document.getElementById("course").value = "";
+        document.getElementById("availability").value = "";
+    }
+</script>
+
+</body>
+</html>

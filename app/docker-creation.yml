@@ -1,0 +1,78 @@
+---
+- name: Install Docker and deploy web app
+  hosts: docker_server
+  become: yes
+
+  vars:
+    src_app_path: "/home/ec2-user"        # Files on Ansible server
+    dest_app_path: "/home/ec2-user/app"   # Folder on Docker server
+    image_name: "digitalform:v1"
+    container_name: "digitalform-container"
+
+  tasks:
+
+    - name: Install dependencies
+      yum:
+        name:
+          - yum-utils
+          - device-mapper-persistent-data
+          - lvm2
+        state: present
+
+    - name: Add Docker CE repo
+      command: >
+        yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+      args:
+        creates: /etc/yum.repos.d/docker-ce.repo
+
+    - name: Install Docker CE
+      yum:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+        state: present
+
+    - name: Start and enable Docker
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+
+    # ------------------------------
+    # Copy app files to Docker server
+    # ------------------------------
+
+    - name: Create app directory on Docker server
+      file:
+        path: "{{ dest_app_path }}"
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: '0755'
+
+    - name: Copy Dockerfile and index.html to Docker server
+      copy:
+        src: "{{ src_app_path }}/"
+        dest: "{{ dest_app_path }}/"
+        owner: ec2-user
+        group: ec2-user
+        mode: '0644'
+      with_fileglob:
+        - "{{ src_app_path }}/Dockerfile"
+        - "{{ src_app_path }}/index.html"
+
+    # ------------------------------
+    # Build & Run Docker
+    # ------------------------------
+
+    - name: Build Docker image
+      command: docker build -t {{ image_name }} {{ dest_app_path }}
+
+    - name: Remove previous container if exists
+      command: docker rm -f {{ container_name }}
+      ignore_errors: yes
+
+    - name: Run Docker container on port 80
+      command: docker run -d -p 80:80 --name {{ container_name }} {{ image_name }}
