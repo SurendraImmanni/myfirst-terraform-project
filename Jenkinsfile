@@ -2,95 +2,83 @@ pipeline {
     agent any
 
     environment {
-        AWS_ACCESS_KEY_ID     = credentials('aws-access-secret-key')
-        SSH_KEY               = credentials('ssh-private-key-id')
+        AWS_ACCESS_KEY_ID = credentials('aws-access-secret-key')
+        SSH_KEY           = credentials('ssh-private-key-id')   // contains username + private key
     }
 
     stages {
 
-        /* --------------------------------------
-         * 1. Checkout from GitHub
-         * -------------------------------------- */
-        stage('Checkout') {
+        /*-----------------------------------------
+         * 1. Clone Terraform + Ansible Repo
+         *-----------------------------------------*/
+        stage('Checkout Code') {
             steps {
                 git branch: 'main', url: 'https://github.com/SurendraImmanni/myfirst-terraform-project.git'
             }
         }
 
-        /* --------------------------------------
-         * 2. Terraform Init
-         * -------------------------------------- */
-        stage('Terraform Init') {
-            steps {
-                sh 'terraform init'
-            }
-        }
+        stage('Terraform Init') { steps { sh 'terraform init' } }
+        stage('Terraform Validate') { steps { sh 'terraform validate' } }
+        stage('Terraform Plan') { steps { sh 'terraform plan -out=newtfplan' } }
+        stage('Terraform Apply') { steps { sh 'terraform apply -auto-approve newtfplan' } }
 
-        /* --------------------------------------
-         * 3. Terraform Validate
-         * -------------------------------------- */
-        stage('Terraform Validate') {
-            steps {
-                sh 'terraform validate'
-            }
-        }
 
-        /* --------------------------------------
-         * 4. Terraform Plan
-         * -------------------------------------- */
-        stage('Terraform Plan') {
-            steps {
-                sh 'terraform plan -out=tfplan'
-            }
-        }
-
-        /* --------------------------------------
-         * 5. Terraform Apply
-         * -------------------------------------- */
-        stage('Terraform Apply') {
-            steps {
-                sh 'terraform apply -auto-approve tfplan'
-            }
-        }
-
-        /* --------------------------------------
-         * 6. Fetch Docker Server IP
-         * -------------------------------------- */
-        stage('Fetch Outputs') {
-            steps {
-                sh 'terraform output -json docker_server_public_ip > docker_ip.json'
-            }
-        }
-
-        /* --------------------------------------
-         * 7. Generate Ansible Inventory
-         * -------------------------------------- */
-        stage('Generate Inventory') {
+        /*-----------------------------------------
+         * 2. Fetch Outputs (Docker + Ansible IPs)
+         *-----------------------------------------*/
+        stage('Fetch Server IPs') {
             steps {
                 script {
-                    def ip = sh(script: "cat docker_ip.json | jq -r '.'", returnStdout: true).trim()
-
-                    writeFile file: 'inventory.ini', text: """
-[docker_server]
-${ip} ansible_user=ec2-user ansible_ssh_private_key_file=${SSH_KEY}
-"""
+                    DOCKER_IP  = sh(script: "terraform output -raw docker_server_public_ip", returnStdout: true).trim()
+                    ANSIBLE_IP = sh(script: "terraform output -raw ansible_server_public_ip", returnStdout: true).trim()
                 }
-
-                sh "cat inventory.ini"
+                echo "Docker Server IP: ${DOCKER_IP}"
+                echo "Ansible Server IP: ${ANSIBLE_IP}"
             }
         }
 
-        /* --------------------------------------
-         * 8. Run Ansible Playbook (Inside dockerfiles/ folder)
-         * -------------------------------------- */
+
+        /*-----------------------------------------
+         * 3. Create inventory.ini & copy required files
+         *-----------------------------------------*/
+        stage('Generate Inventory & Copy Files') {
+            steps {
+                script {
+                    writeFile file: "inventory.ini", text: """
+[docker_server]
+${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SSH_KEY_USR}/.ssh/id_rsa
+"""
+
+                    sh """
+                        echo "Copying inventory & app folder to Ansible server..."
+                        scp -o StrictHostKeyChecking=no -i ${SSH_KEY} inventory.ini ${SSH_KEY_USR}@${ANSIBLE_IP}:/home/${SSH_KEY_USR}/
+                        scp -o StrictHostKeyChecking=no -i ${SSH_KEY} -r app ${SSH_KEY_USR}@${ANSIBLE_IP}:/home/${SSH_KEY_USR}/
+                    """
+                }
+            }
+        }
+
+
+        /*-----------------------------------------
+         * 4. SSH into Ansible server and run playbook
+         *-----------------------------------------*/
         stage('Run Ansible Playbook') {
             steps {
                 sh """
-                    ansible-playbook -i inventory.ini app/docker-creation.yml \
-                    --private-key ${SSH_KEY} \
-                    --ssh-extra-args='-o StrictHostKeyChecking=no'
+                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_KEY_USR}@${ANSIBLE_IP} \
+                "ansible-playbook -i /home/${SSH_KEY_USR}/inventory.ini /home/${SSH_KEY_USR}/app/docker-creation.yml"
                 """
             }
+        }
+    }
+
+    /*-----------------------------------------
+     * 5. Final cleanup
+     *-----------------------------------------*/
+    post {
+        always {
+            cleanWs()
+            echo "Workspace cleaned ✔"
         }
     }
 }
