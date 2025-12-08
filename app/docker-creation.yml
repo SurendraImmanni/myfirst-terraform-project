@@ -4,12 +4,15 @@
   become: yes
 
   vars:
-    src_app_path: "/home/ec2-user/app"        # Files on Ansible server
-    dest_app_path: "/home/ec2-user/"   # Folder on Docker server
+    src_app_path: "/home/ec2-user/app"        # Path on Ansible server
+    dest_app_path: "/home/ec2-user"           # Target path on Docker server
     image_name: "digitalform:v1"
     container_name: "digitalform-container"
 
   tasks:
+    # ----------------------------
+    # Install & Start Docker
+    # ----------------------------
     - name: Install docker
       yum:
         name: docker
@@ -21,43 +24,36 @@
         state: started
         enabled: yes
 
+    # ----------------------------
+    # Copy only required files
+    # ----------------------------
 
-    # ------------------------------
-    # Copy app files to Docker server
-    # ------------------------------
-
-    - name: Create app directory on Docker server
+    - name: Ensure destination directory exists
       file:
         path: "{{ dest_app_path }}"
         state: directory
-        owner: ec2-user
-        group: ec2-user
-        mode: '0755'
 
-    - name: Copy Dockerfile and index.html to Docker server
+    - name: Copy Dockerfile and index.html from Ansible → Docker server
       copy:
         src: "{{ item }}"
         dest: "{{ dest_app_path }}/"
         owner: ec2-user
         group: ec2-user
         mode: '0644'
-      with_fileglob:
+      loop:
         - "{{ src_app_path }}/Dockerfile"
         - "{{ src_app_path }}/index.html"
 
-    # ------------------------------
-    # Build & Run Docker
-    # ------------------------------
+    # ----------------------------
+    # Build Image & Run Container
+    # ----------------------------
 
-    - name: Build Docker image
+    - name: Build Docker image from copied files
       command: docker build -t {{ image_name }} {{ dest_app_path }}
 
     - name: Remove previous container if exists
       command: docker rm -f {{ container_name }}
       ignore_errors: yes
 
-    - name: Run Docker container on port 80
+    - name: Run Docker container in same path
       command: docker run -d -p 80:80 --name {{ container_name }} {{ image_name }}
-
-    
-      
