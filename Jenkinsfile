@@ -58,20 +58,6 @@ pipeline {
             }
         }
 
-        /*-----------------------------------------
-         * 4. Install Ansible on Ansible Server (fix)
-         *-----------------------------------------*/
-        stage('Install Ansible on Ansible Server') {
-            steps {
-                sh """
-                ssh -o StrictHostKeyChecking=no -i $SSH_KEY ${SSH_KEY_USR}@${ANSIBLE_IP} "
-                sudo dnf update -y &&
-                sudo dnf install -y python3 python3-pip git &&
-                pip3 install ansible
-                "
-                """
-            }
-        }
 
         /*-----------------------------------------
          * 5. Create inventory.ini & Copy Files
