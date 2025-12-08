@@ -51,8 +51,8 @@ pipeline {
                             echo "SSH is ready!"
                             break
                         }
-                        echo "SSH not ready, retrying in 10 sec... attempt $i"
-                        sleep 10
+                        echo "SSH not ready, retrying in 20 sec... attempt $i"
+                        sleep 20
                     }
                 }
             }
