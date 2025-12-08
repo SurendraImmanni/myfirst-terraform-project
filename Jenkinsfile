@@ -3,8 +3,8 @@ pipeline {
 
     environment {
         AWS_ACCESS_KEY_ID = credentials('aws-access-secret-key')
-        SSH_KEY           = credentials('ssh-private-key-id')   // private key from credentials
-        SSH_KEY_USR       = "ec2-user"                          // <--- Add username here
+        SSH_KEY           = credentials('ssh-private-key-id')   // private key from Jenkins credentials
+        SSH_KEY_USR       = "ec2-user"
     }
 
     stages {
@@ -39,14 +39,14 @@ pipeline {
         }
 
         /*-----------------------------------------
-         * 2.5 Wait for SSH Availability
+         * 3. Wait for SSH Availability
          *-----------------------------------------*/
         stage('Wait for SSH Ready') {
             steps {
                 script {
                     echo "Waiting for Ansible server SSH to become available..."
                     for (int i = 1; i <= 20; i++) {
-                        def result = sh(script: "ssh -o StrictHostKeyChecking=no -i $SSH_KEY ${SSH_KEY_USR}@${ANSIBLE_IP} 'echo ok' || true", returnStatus:true)
+                        def result = sh(script: "ssh -o StrictHostKeyChecking=no -i $SSH_KEY ${SSH_KEY_USR}@${ANSIBLE_IP} 'echo ok'", returnStatus:true)
                         if (result == 0) {
                             echo "SSH is ready!"
                             break
@@ -59,12 +59,26 @@ pipeline {
         }
 
         /*-----------------------------------------
-         * 3. Create inventory.ini & Copy Files
+         * 4. Install Ansible on Ansible Server (fix)
+         *-----------------------------------------*/
+        stage('Install Ansible on Ansible Server') {
+            steps {
+                sh """
+                ssh -o StrictHostKeyChecking=no -i $SSH_KEY ${SSH_KEY_USR}@${ANSIBLE_IP} "
+                sudo dnf update -y &&
+                sudo dnf install -y python3 python3-pip git &&
+                pip3 install ansible
+                "
+                """
+            }
+        }
+
+        /*-----------------------------------------
+         * 5. Create inventory.ini & Copy Files
          *-----------------------------------------*/
         stage('Generate Inventory & Copy Files') {
             steps {
                 script {
-
                     writeFile file: "inventory.ini", text: """
 [docker_server]
 ${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SSH_KEY_USR}/.ssh/id_rsa
@@ -80,7 +94,7 @@ ${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SS
         }
 
         /*-----------------------------------------
-         * 4. Run Ansible Playbook on Ansible Server
+         * 6. Run Ansible Playbook
          *-----------------------------------------*/
         stage('Run Ansible Playbook') {
             steps {
@@ -92,9 +106,6 @@ ${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SS
         }
     }
 
-    /*-----------------------------------------
-     * 5. Cleanup
-     *-----------------------------------------*/
     post {
         always {
             cleanWs()
