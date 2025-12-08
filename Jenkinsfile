@@ -3,13 +3,14 @@ pipeline {
 
     environment {
         AWS_ACCESS_KEY_ID = credentials('aws-access-secret-key')
-        SSH_KEY           = credentials('ssh-private-key-id')   // contains username + private key
+        SSH_KEY           = credentials('ssh-private-key-id')   // private key from credentials
+        SSH_KEY_USR       = "ec2-user"                          // <--- Add username here
     }
 
     stages {
 
         /*-----------------------------------------
-         * 1. Clone Terraform + Ansible Repo
+         * 1. Clone Terraform Repo
          *-----------------------------------------*/
         stage('Checkout Code') {
             steps {
@@ -24,7 +25,7 @@ pipeline {
 
 
         /*-----------------------------------------
-         * 2. Fetch Outputs (Docker + Ansible IPs)
+         * 2. Fetch Output IPs
          *-----------------------------------------*/
         stage('Fetch Server IPs') {
             steps {
@@ -37,13 +38,33 @@ pipeline {
             }
         }
 
+        /*-----------------------------------------
+         * 2.5 Wait for SSH Availability
+         *-----------------------------------------*/
+        stage('Wait for SSH Ready') {
+            steps {
+                script {
+                    echo "Waiting for Ansible server SSH to become available..."
+                    for (int i = 1; i <= 20; i++) {
+                        def result = sh(script: "ssh -o StrictHostKeyChecking=no -i $SSH_KEY ${SSH_KEY_USR}@${ANSIBLE_IP} 'echo ok' || true", returnStatus:true)
+                        if (result == 0) {
+                            echo "SSH is ready!"
+                            break
+                        }
+                        echo "SSH not ready, retrying in 10 sec... attempt $i"
+                        sleep 10
+                    }
+                }
+            }
+        }
 
         /*-----------------------------------------
-         * 3. Create inventory.ini & copy required files
+         * 3. Create inventory.ini & Copy Files
          *-----------------------------------------*/
         stage('Generate Inventory & Copy Files') {
             steps {
                 script {
+
                     writeFile file: "inventory.ini", text: """
 [docker_server]
 ${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SSH_KEY_USR}/.ssh/id_rsa
@@ -51,21 +72,20 @@ ${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SS
 
                     sh """
                         echo "Copying inventory & app folder to Ansible server..."
-                        scp -o StrictHostKeyChecking=no -i ${SSH_KEY} inventory.ini ${SSH_KEY_USR}@${ANSIBLE_IP}:/home/${SSH_KEY_USR}/
-                        scp -o StrictHostKeyChecking=no -i ${SSH_KEY} -r app ${SSH_KEY_USR}@${ANSIBLE_IP}:/home/${SSH_KEY_USR}/
+                        scp -o StrictHostKeyChecking=no -i $SSH_KEY inventory.ini ${SSH_KEY_USR}@${ANSIBLE_IP}:/home/${SSH_KEY_USR}/
+                        scp -o StrictHostKeyChecking=no -i $SSH_KEY -r app ${SSH_KEY_USR}@${ANSIBLE_IP}:/home/${SSH_KEY_USR}/
                     """
                 }
             }
         }
 
-
         /*-----------------------------------------
-         * 4. SSH into Ansible server and run playbook
+         * 4. Run Ansible Playbook on Ansible Server
          *-----------------------------------------*/
         stage('Run Ansible Playbook') {
             steps {
                 sh """
-                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_KEY_USR}@${ANSIBLE_IP} \
+                ssh -o StrictHostKeyChecking=no -i $SSH_KEY ${SSH_KEY_USR}@${ANSIBLE_IP} \
                 "ansible-playbook -i /home/${SSH_KEY_USR}/inventory.ini /home/${SSH_KEY_USR}/app/docker-creation.yml"
                 """
             }
@@ -73,7 +93,7 @@ ${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SS
     }
 
     /*-----------------------------------------
-     * 5. Final cleanup
+     * 5. Cleanup
      *-----------------------------------------*/
     post {
         always {
