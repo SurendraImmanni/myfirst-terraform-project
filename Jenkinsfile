@@ -18,8 +18,8 @@ pipeline {
 
         stage('Terraform Init')      { steps { sh 'terraform init' } }
         stage('Terraform Validate')  { steps { sh 'terraform validate' } }
-        stage('Terraform Plan')      { steps { sh 'terraform plan -out=newctfplan' } }
-        stage('Terraform Apply')     { steps { sh 'terraform apply -auto-approve newctfplan' } }
+        stage('Terraform Plan')      { steps { sh 'terraform plan -out=newdtfplan' } }
+        stage('Terraform Apply')     { steps { sh 'terraform apply -auto-approve newdtfplan' } }
 
         /*-----------------------------------------*/
         stage('Fetch Server IPs') {
@@ -73,7 +73,7 @@ pipeline {
                 script {
                     writeFile file: "inventory.ini", text: """
 [docker_server]
-${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SSH_KEY_USR}/.ssh/id_rsa
+${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SSH_KEY_USR}/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'
 """
 
                     sh """
