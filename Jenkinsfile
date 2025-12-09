@@ -86,9 +86,8 @@ ${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SS
         stage('Run Ansible Playbook') {
             steps {
                 sh """
-                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_KEY_USR}@${ANSIBLE_IP} '
-                    export PATH=/usr/local/bin:/usr/bin:/bin:/home/${SSH_KEY_USR}/.local/bin:\$PATH
-                    ansible-playbook -i /home/${SSH_KEY_USR}/inventory.ini /home/${SSH_KEY_USR}/app/docker-creation.yml
+                ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_KEY_USR}@${ANSIBLE_IP} \
+                ansible-playbook -i /home/${SSH_KEY_USR}/inventory.ini /home/${SSH_KEY_USR}/app/docker-creation.yml
                 '
                 """
             }
