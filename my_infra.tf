@@ -19,8 +19,8 @@ resource "aws_instance" "ansible_server" {
 
  user_data = <<-EOF
 #!/bin/bash
-sudo yum update -y
-sudo yum install python3-pip -y
+sudo dnf update -y
+sudo dnf install python3 python3-pip -y
 pip3 install ansible
 EOF
 
