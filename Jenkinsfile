@@ -20,8 +20,8 @@ pipeline {
 
         stage('Terraform Init') { steps { sh 'terraform init' } }
         stage('Terraform Validate') { steps { sh 'terraform validate' } }
-        stage('Terraform Plan') { steps { sh 'terraform plan -out=newatfplan' } }
-        stage('Terraform Apply') { steps { sh 'terraform apply -auto-approve newatfplan' } }
+        stage('Terraform Plan') { steps { sh 'terraform plan -out=newbtfplan' } }
+        stage('Terraform Apply') { steps { sh 'terraform apply -auto-approve newbtfplan' } }
 
         /*-----------------------------------------
          * 2. Fetch Output IPs
