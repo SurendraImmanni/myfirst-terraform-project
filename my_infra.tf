@@ -19,39 +19,13 @@ resource "aws_instance" "ansible_server" {
 
  user_data = <<-EOF
 #!/bin/bash
-set -e
-
 sudo dnf update -y
-sudo dnf install -y python3 git
+sudo dnf install -y python3
 
-# Install pip using get-pip.py
-curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
-sudo python3 /tmp/get-pip.py
-
-# Use the pip that get-pip.py just installed (usually /usr/local/bin/pip3)
-if [ -x /usr/local/bin/pip3 ]; then
-  PIP_BIN=/usr/local/bin/pip3
-else
-  PIP_BIN=$(command -v pip3 || echo "")
-fi
-
-if [ -z "$PIP_BIN" ]; then
-  echo "pip3 not found after get-pip.py" > /home/ec2-user/ansible_setup.log
-  exit 1
-fi
-
-sudo "$PIP_BIN" install --upgrade pip
-sudo "$PIP_BIN" install ansible
-
-# Ensure ansible is visible on default PATH
-if [ -x /usr/local/bin/ansible-playbook ]; then
-  sudo ln -sf /usr/local/bin/ansible-playbook /usr/bin/ansible-playbook
-  sudo ln -sf /usr/local/bin/ansible /usr/bin/ansible
-fi
-
-echo "SETUP COMPLETE" > /home/ec2-user/ansible_setup.log
+curl -O https://bootstrap.pypa.io/get-pip.py
+sudo python3 get-pip.py
+sudo pip3 install ansible
 EOF
-
 
   tags = {
     Name = "ansible-server"
