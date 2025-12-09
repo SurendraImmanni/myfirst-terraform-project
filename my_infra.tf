@@ -19,10 +19,10 @@ resource "aws_instance" "ansible_server" {
 
  user_data = <<-EOF
 #!/bin/bash
-sudo dnf update -y
-sudo dnf install -y ansible-core
+sudo yum update -y
+sudo yum install python3-pip -y
+pip3 install ansible
 EOF
-
 
   tags = {
     Name = "ansible-server"
