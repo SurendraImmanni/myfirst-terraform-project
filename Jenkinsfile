@@ -18,8 +18,8 @@ pipeline {
 
         stage('Terraform Init')      { steps { sh 'terraform init' } }
         stage('Terraform Validate')  { steps { sh 'terraform validate' } }
-        stage('Terraform Plan')      { steps { sh 'terraform plan -out=newdtfplan' } }
-        stage('Terraform Apply')     { steps { sh 'terraform apply -auto-approve newdtfplan' } }
+        stage('Terraform Plan')      { steps { sh 'terraform plan -out=newetfplan' } }
+        stage('Terraform Apply')     { steps { sh 'terraform apply -auto-approve newetfplan' } }
 
         /*-----------------------------------------*/
         stage('Fetch Server IPs') {
@@ -37,13 +37,14 @@ pipeline {
         stage('Wait for SSH Ready') {
             steps {
                 script {
-                echo "Checking SSH Availability..."
-                for (int i = 1; i <= 20; i++) {
-                    def result = sh(script: "ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_KEY_USR}@${ANSIBLE_IP} 'echo ok'", returnStatus:true)
-                    if (result == 0) { echo "SSH ready ✔"; break }
-                    echo "SSH not ready → retry in 20s (Attempt $i)"
-                    sleep 20
-                } }
+                    echo "Checking SSH Availability..."
+                    for (int i = 1; i <= 20; i++) {
+                        def result = sh(script: "ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_KEY_USR}@${ANSIBLE_IP} 'echo ok'", returnStatus:true)
+                        if (result == 0) { echo "SSH ready ✔"; break }
+                        echo "SSH not ready → retry in 20s (Attempt $i)"
+                        sleep 20
+                    }
+                }
             }
         }
 
@@ -51,19 +52,21 @@ pipeline {
         stage('Wait for Ansible Installation') {
             steps {
                 script {
-                echo "Waiting for Ansible availability..."
-                for (int i = 1; i <= 20; i++) {
-                    def result = sh(script: """
-                        ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_KEY_USR}@${ANSIBLE_IP} \
-                        'export PATH=/usr/local/bin:/usr/bin:/bin:/home/ec2-user/.local/bin:$PATH && ansible-playbook --version'
-                    """, returnStatus:true)
-                    if (result == 0) { 
-                        echo "Ansible installed & ready ✔"
-                        break 
+                    echo "Waiting for Ansible availability..."
+                    for (int i = 1; i <= 20; i++) {
+                        def result = sh(script: """
+                            ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_KEY_USR}@${ANSIBLE_IP} \
+                            'export PATH=/usr/local/bin:/usr/bin:/bin:/home/ec2-user/.local/bin:$PATH && ansible-playbook --version'
+                        """, returnStatus:true)
+
+                        if (result == 0) {
+                            echo "Ansible installed & ready ✔"
+                            break
+                        }
+                        echo "Ansible not installed yet → retry in 15s (Attempt $i)"
+                        sleep 15
                     }
-                    echo "Ansible not installed yet → retry in 15s (Attempt $i)"
-                    sleep 15
-                } }
+                }
             }
         }
 
@@ -71,6 +74,7 @@ pipeline {
         stage('Generate Inventory & Copy Files') {
             steps {
                 script {
+
                     writeFile file: "inventory.ini", text: """
 [docker_server]
 ${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SSH_KEY_USR}/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'
@@ -79,6 +83,13 @@ ${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SS
                     sh """
                         echo "Copying inventory & app to Ansible Server..."
                         scp -o StrictHostKeyChecking=no -i ${SSH_KEY} inventory.ini ${SSH_KEY_USR}@${ANSIBLE_IP}:/home/${SSH_KEY_USR}/
+
+                        echo "Creating .ssh folder & copying private key..."
+                        ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_KEY_USR}@${ANSIBLE_IP} 'mkdir -p /home/${SSH_KEY_USR}/.ssh'
+                        scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_KEY} ${SSH_KEY_USR}@${ANSIBLE_IP}:/home/${SSH_KEY_USR}/.ssh/id_rsa
+                        ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${SSH_KEY_USR}@${ANSIBLE_IP} 'chmod 600 /home/${SSH_KEY_USR}/.ssh/id_rsa'
+
+                        echo "Copying App Folder..."
                         scp -o StrictHostKeyChecking=no -i ${SSH_KEY} -r app ${SSH_KEY_USR}@${ANSIBLE_IP}:/home/${SSH_KEY_USR}/
                     """
                 }
