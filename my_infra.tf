@@ -17,12 +17,21 @@ resource "aws_instance" "ansible_server" {
   # Use Jenkins key pair
   key_name = data.terraform_remote_state.network.outputs.key_name
 
- user_data = <<-EOF
+ user_data = <<-EOT
 #!/bin/bash
 sudo dnf update -y
-sudo dnf install python3 python3-pip -y
-pip3 install ansible
-EOF
+sudo dnf install -y python3
+
+# Install pip (works for Amazon Linux 2023)
+curl -O https://bootstrap.pypa.io/get-pip.py
+sudo python3 get-pip.py
+
+# Install ansible
+sudo pip3 install ansible
+
+echo "Ansible Installed Successfully" > /home/ec2-user/ansible_installed.txt
+EOT
+
 
   tags = {
     Name = "ansible-server"
