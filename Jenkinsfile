@@ -85,7 +85,6 @@ ${DOCKER_IP} ansible_user=${SSH_KEY_USR} ansible_ssh_private_key_file=/home/${SS
         stage('Run Ansible Playbook') {
             steps {
                 sh """
-                ssh -o StrictHostKeyChecking=no -i $SSH_KEY ec2-user@$ANSIBLE_IP 'which ansible-playbook || sudo pip3 install ansible'
                 ssh -o StrictHostKeyChecking=no -i $SSH_KEY ${SSH_KEY_USR}@${ANSIBLE_IP} \
                 "ansible-playbook -i /home/${SSH_KEY_USR}/inventory.ini /home/${SSH_KEY_USR}/app/docker-creation.yml"
                 """
