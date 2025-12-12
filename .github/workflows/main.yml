@@ -1,0 +1,130 @@
+name: Terraform-Ansible-Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      SSH_KEY_USR: "ec2-user"
+
+    steps:
+    # ---------------------------------------------------
+    # Checkout Repository
+    # ---------------------------------------------------
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # ---------------------------------------------------
+    # Set up Terraform
+    # ---------------------------------------------------
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+
+    # ---------------------------------------------------
+    # Configure AWS Credentials
+    # ---------------------------------------------------
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ap-south-1
+
+    # ---------------------------------------------------
+    # Setup SSH private key
+    # ---------------------------------------------------
+    - name: Setup SSH Key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+
+    # ---------------------------------------------------
+    # Terraform Steps
+    # ---------------------------------------------------
+    - name: Terraform Init
+      run: terraform init
+
+    - name: Terraform Validate
+      run: terraform validate
+
+    - name: Terraform Plan
+      run: terraform plan -out=newetfplan
+
+    - name: Terraform Apply
+      run: terraform apply -auto-approve newetfplan
+
+    # ---------------------------------------------------
+    # Fetch Terraform Output Public IPs
+    # ---------------------------------------------------
+    - name: Get Server IPs
+      run: |
+        echo "ANSIBLE_IP=$(terraform output -raw ansible_server_public_ip)" >> $GITHUB_ENV
+        echo "DOCKER_IP=$(terraform output -raw docker_server_public_ip)" >> $GITHUB_ENV
+
+    - name: Show IPs
+      run: |
+        echo "Docker Server IP  : $DOCKER_IP"
+        echo "Ansible Server IP : $ANSIBLE_IP"
+
+    # ---------------------------------------------------
+    # Wait for SSH Availability
+    # ---------------------------------------------------
+    - name: Wait for SSH Ready
+      run: |
+        echo "Waiting for SSH..."
+        for i in {1..20}; do
+          ssh -o StrictHostKeyChecking=no $SSH_KEY_USR@$ANSIBLE_IP "echo ok" 2>/dev/null && break
+          echo "SSH not ready → retry in 20s ($i)"
+          sleep 20
+        done
+
+    # ---------------------------------------------------
+    # Wait for Ansible Installation
+    # ---------------------------------------------------
+    - name: Wait for Ansible Ready
+      run: |
+        echo "Checking Ansible installation..."
+        for i in {1..20}; do
+          ssh -o StrictHostKeyChecking=no $SSH_KEY_USR@$ANSIBLE_IP "ansible-playbook --version" && break
+          echo "Ansible not installed yet → retry 15s ($i)"
+          sleep 15
+        done
+
+    # ---------------------------------------------------
+    # Create inventory & Copy all files to Ansible Server
+    # ---------------------------------------------------
+    - name: Prepare Inventory & Copy Files
+      run: |
+        echo "[docker_server]" > inventory.ini
+        echo "$DOCKER_IP ansible_user=$SSH_KEY_USR ansible_ssh_private_key_file=/home/$SSH_KEY_USR/.ssh/id_rsa ansible_ssh_common_args='-o StrictHostKeyChecking=no'" >> inventory.ini
+        
+        echo "Copying inventory..."
+        scp -o StrictHostKeyChecking=no inventory.ini $SSH_KEY_USR@$ANSIBLE_IP:/home/$SSH_KEY_USR/
+
+        echo "Setting up .ssh on Ansible server..."
+        ssh -o StrictHostKeyChecking=no $SSH_KEY_USR@$ANSIBLE_IP "mkdir -p /home/$SSH_KEY_USR/.ssh"
+
+        echo "Copying private key..."
+        scp -o StrictHostKeyChecking=no ~/.ssh/id_rsa $SSH_KEY_USR@$ANSIBLE_IP:/home/$SSH_KEY_USR/.ssh/id_rsa
+        ssh -o StrictHostKeyChecking=no $SSH_KEY_USR@$ANSIBLE_IP "chmod 600 /home/$SSH_KEY_USR/.ssh/id_rsa"
+
+        echo "Copying App Folder..."
+        scp -o StrictHostKeyChecking=no -r app $SSH_KEY_USR@$ANSIBLE_IP:/home/$SSH_KEY_USR/
+
+    # ---------------------------------------------------
+    # Run Ansible Playbook
+    # ---------------------------------------------------
+    - name: Run Ansible Playbook
+      run: |
+        ssh -o StrictHostKeyChecking=no $SSH_KEY_USR@$ANSIBLE_IP "
+            ansible-playbook -i /home/$SSH_KEY_USR/inventory.ini /home/$SSH_KEY_USR/app/docker-creation.yml
+        "
+
